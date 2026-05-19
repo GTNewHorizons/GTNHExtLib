@@ -1,0 +1,12 @@
+{
+    "identifier": "falsepatternlib_dependencies",
+    "repositories": [
+        "https://repo1.maven.org/maven2/",
+        "https://libraries.minecraft.net/"
+    ],
+    "dependencies": {
+        "always": {
+            "common": ["$DEPS"]
+        }
+    }
+}

@@ -1,0 +1,57 @@
+import kotlin.Pair
+
+configurations {
+    deploader
+
+    bundled {
+        transitive = false
+    }
+
+    bundledSources {
+        transitive = false
+    }
+}
+
+project.ext.set("depload_libs", new ArrayList<Pair<String, String>>())
+
+def depload(String name, String java = "") {
+    List<Pair<String, String>> theList = project.ext.get("depload_libs")
+    theList.add(new Pair(name, java))
+    project.dependencies.add("bundled", name)
+}
+
+def jvmDgVersion = "1.3.6"
+def fplibVersion = "1.11.0"
+
+dependencies {
+    deploader("com.falsepattern:falsepatternlib-mc1.7.10:${fplibVersion}:deploader") // LGPL 3.0
+    shadowImplementation("com.falsepattern:falsepatternlib-mc1.7.10:${fplibVersion}:deploader_stub") // LGPL 3.0
+
+    // NOTE:
+    // For any given "java" version argument, make sure a corresponding gtnhextlib_deps<version>.json file exists in META-INF!
+    // If you remove all depload calls for a given version argument, remove the corresponding json.
+    depload("it.unimi.dsi:fastutil:8.5.16") // Apache 2.0
+    depload("org.joml:joml:1.10.8") // MIT
+    depload("com.mojang:brigadier:1.0.18") // MIT
+    depload("xyz.wagyourtail.jvmdowngrader:jvmdowngrader-java-api:${jvmDgVersion}:downgraded-8", "8") // LGPL 2.1
+    depload("xyz.wagyourtail.jvmdowngrader:jvmdowngrader-java-api:${jvmDgVersion}:downgraded-17", "17") // LGPL 2.1
+
+    bundledSources("it.unimi.dsi:fastutil:8.5.16:sources")
+    bundledSources("org.joml:joml:1.10.8:sources")
+    bundledSources("com.mojang:brigadier:1.0.18:sources")
+
+    compileOnly("com.gtnewhorizons.retrofuturabootstrap:RetroFuturaBootstrap:1.0.10") { transitive = false }
+    compileOnly('org.jetbrains:annotations:26.0.1')
+    compileOnly("org.projectlombok:lombok:1.18.36") { transitive = false }
+    annotationProcessor("org.projectlombok:lombok:1.18.36")
+
+    afterEvaluate {
+        dependencies {
+            testImplementation(platform('org.junit:junit-bom:5.14.1'))
+            testImplementation('org.junit.jupiter:junit-jupiter')
+            testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine')
+            testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+            testAnnotationProcessor("com.github.bsideup.jabel:jabel-javac-plugin:1.0.1")
+        }
+    }
+}

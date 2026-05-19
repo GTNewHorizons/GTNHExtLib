@@ -1,0 +1,12 @@
+{
+    "identifier": "falsepatternlib_dependencies",
+    "minJava": 17,
+    "repositories": [
+        "https://maven.wagyourtail.xyz/releases/"
+    ],
+    "dependencies": {
+        "always": {
+            "common": ["$DEPS"]
+        }
+    }
+}
