@@ -6,7 +6,9 @@
     ],
     "dependencies": {
         "always": {
-            "common": ["$DEPS"]
+            "common": ["$DEPS"],
+            "client": [],
+            "server": []
         }
     }
 }
