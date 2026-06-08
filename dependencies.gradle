@@ -30,13 +30,13 @@ dependencies {
     // NOTE:
     // For any given "java" version argument, make sure a corresponding gtnhextlib_deps<version>.json file exists in META-INF!
     // If you remove all depload calls for a given version argument, remove the corresponding json.
-    depload("it.unimi.dsi:fastutil:8.5.16") // Apache 2.0
+    depload("it.unimi.dsi:fastutil:8.5.18") // Apache 2.0
     depload("org.joml:joml:1.10.8") // MIT
     depload("com.mojang:brigadier:1.0.18") // MIT
     depload("xyz.wagyourtail.jvmdowngrader:jvmdowngrader-java-api:${jvmDgVersion}:downgraded-8", "8") // LGPL 2.1
     depload("xyz.wagyourtail.jvmdowngrader:jvmdowngrader-java-api:${jvmDgVersion}:downgraded-17", "17") // LGPL 2.1
 
-    bundledSources("it.unimi.dsi:fastutil:8.5.16:sources")
+    bundledSources("it.unimi.dsi:fastutil:8.5.18:sources")
     bundledSources("org.joml:joml:1.10.8:sources")
     bundledSources("com.mojang:brigadier:1.0.18:sources")
 
