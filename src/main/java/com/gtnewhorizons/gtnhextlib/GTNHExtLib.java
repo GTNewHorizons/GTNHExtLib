@@ -6,7 +6,8 @@ import cpw.mods.fml.common.Mod;
         modid = GTNHExtLib.MODID,
         version = Tags.VERSION,
         name = GTNHExtLib.MODNAME,
-        acceptedMinecraftVersions = "[1.7.10]")
+        acceptedMinecraftVersions = "[1.7.10]",
+        acceptableRemoteVersions = "*")
 public class GTNHExtLib {
 
     public static final String MODID = "gtnhextlib";
