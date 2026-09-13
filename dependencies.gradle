@@ -20,7 +20,7 @@ def depload(String name, String java = "") {
     project.dependencies.add("bundled", name)
 }
 
-def jvmDgVersion = "2.0.1"
+def jvmDgVersion = project.property("jvmDowngraderVersion")
 def fplibVersion = "1.11.0"
 
 dependencies {

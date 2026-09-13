@@ -1,10 +1,20 @@
 import com.gtnewhorizons.retrofuturagradle.mcp.ReobfuscatedJar
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import com.gtnewhorizons.gtnhextlib.build.MinimizeJvmDowngraderApi
+import com.gtnewhorizons.gtnhextlib.build.VerifyJvmDowngraderArtifacts
 import org.gradle.jvm.tasks.Jar
 
 plugins {
     id("com.gtnewhorizons.gtnhconvention")
 }
+
+val jvmDowngraderVersion: String by project
+val jvmDowngraderJavaApi8Sha256: String by project
+val jvmDowngraderJavaApi17Sha256: String by project
+val jvmDowngraderApiChecksums = mapOf(
+    "jvmdowngrader-java-api-$jvmDowngraderVersion-downgraded-8.jar" to jvmDowngraderJavaApi8Sha256,
+    "jvmdowngrader-java-api-$jvmDowngraderVersion-downgraded-17.jar" to jvmDowngraderJavaApi17Sha256,
+)
 
 tasks.processResources {
     from(configurations["deploader"]) {
@@ -66,8 +76,67 @@ val reobfShadowJar = tasks.named<ReobfuscatedJar>("reobfShadowJar")
 reobfShadowJar.configure {
     archiveClassifier.set("slim")
 }
+
+val verifyJvmDowngraderArtifacts by tasks.registering(VerifyJvmDowngraderArtifacts::class) {
+    artifacts.from(configurations["bundled"])
+    checksums.putAll(jvmDowngraderApiChecksums)
+}
+
+tasks.named("fatJar") {
+    dependsOn(verifyJvmDowngraderArtifacts)
+}
 tasks.named("assemble") {
     dependsOn(reobfShadowJar)
+}
+
+fun minimizedJvmDowngraderApi(javaTarget: String) =
+    tasks.register<MinimizeJvmDowngraderApi>("minimizeJvmDowngraderApi$javaTarget") {
+        group = "build"
+        description = "Builds the Java $javaTarget JvmDowngrader API required by a closed-pack usage report"
+        getJavaTarget().set(javaTarget)
+        val jarName = "jvmdowngrader-java-api-$jvmDowngraderVersion-downgraded-$javaTarget.jar"
+        expectedSha256.set(jvmDowngraderApiChecksums.getValue(jarName))
+        usageReport.set(layout.file(providers.gradleProperty("jvmdgUsageReport$javaTarget").map { file(it) }))
+        inputApiJar.set(layout.file(provider {
+            configurations["bundled"].single { it.name.endsWith("-downgraded-$javaTarget.jar") }
+        }))
+        outputJar.set(layout.buildDirectory.file(
+            "jvmdg-minimized/java$javaTarget/" +
+                "jvmdowngrader-java-api-$jvmDowngraderVersion-downgraded-$javaTarget.jar"))
+        auditDirectory.set(layout.buildDirectory.dir("reports/jvmdg-minimized/java$javaTarget"))
+    }
+
+val minimizeJvmDowngraderApi8 = minimizedJvmDowngraderApi("8")
+val minimizeJvmDowngraderApi17 = minimizedJvmDowngraderApi("17")
+
+tasks.register<Jar>("gtnhOfflineJar") {
+    group = "build"
+    description =
+        "Builds the closed-pack offline jar using -PjvmdgUsageReport8 and -PjvmdgUsageReport17"
+    archiveClassifier.set("offline-gtnh")
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    dependsOn(tasks.named("reobfJar"), minimizeJvmDowngraderApi8, minimizeJvmDowngraderApi17)
+
+    val reobfJar = tasks.named<ReobfuscatedJar>("reobfJar")
+    from(zipTree(reobfJar.flatMap { it.archiveFile })) {
+        exclude(
+            "META-INF/falsepatternlib_repo/xyz/wagyourtail/jvmdowngrader/" +
+                "jvmdowngrader-java-api/**/*.jar")
+    }
+    manifest {
+        from(tasks.shadowJar.get().manifest)
+    }
+
+    val apiRepositoryPath =
+        "META-INF/falsepatternlib_repo/xyz/wagyourtail/jvmdowngrader/" +
+            "jvmdowngrader-java-api/$jvmDowngraderVersion"
+    listOf(minimizeJvmDowngraderApi8, minimizeJvmDowngraderApi17).forEach { minimized ->
+        into(apiRepositoryPath) {
+            from(minimized.flatMap { it.outputJar })
+        }
+    }
 }
 
 // Only publish fat jar to mn/cf
