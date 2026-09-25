@@ -45,3 +45,13 @@ configurations.matching { it.name == "compileClasspath" || it.name == "runtimeCl
         verifyJvmDowngrader(files.single { it.name == jarName })
     }
 }
+
+val verifyOfflineGtnh by tasks.registering(JavaExec::class) {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.gtnewhorizons.gtnhextlib.build.OfflineGtnhTest")
+    args(layout.buildDirectory.dir("offline-gtnh-test").get().asFile.absolutePath)
+}
+
+tasks.check { dependsOn(verifyOfflineGtnh) }
+tasks.jar { dependsOn(verifyOfflineGtnh) }

@@ -16,7 +16,6 @@ import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -190,6 +189,9 @@ public abstract class MinimizeJvmDowngraderApi extends DefaultTask {
         summary.put("source_bytes", Files.size(apiJar));
         summary.put("output_jar", outputJar.getFileName().toString());
         summary.put("output_bytes", Files.size(outputJar));
+        summary.put("output_sha256", sha256(outputJar));
+        summary.put("cache_classifier", "downgraded-" + getJavaTarget().get() + "-" + cacheSuffix(outputJar));
+        summary.put("report_sha256", sha256(reportPath));
         summary.put("report_roots", reportRootCount);
         summary.put("metadata_support_roots", metadataSupportRoots);
         summary.put("source_missing_report_members", sourceMissingReportMembers);
@@ -317,7 +319,7 @@ public abstract class MinimizeJvmDowngraderApi extends DefaultTask {
     }
 
     @SuppressWarnings("deprecation")
-    private static Set<Type> internalReferences(Map<Type, byte[]> classes, Map<String, Type> availableByName) {
+    static Set<Type> internalReferences(Map<Type, byte[]> classes, Map<String, Type> availableByName) {
         Set<Type> references = new HashSet<>();
         Set<String> absent = new TreeSet<>();
         Remapper collector = new Remapper() {
@@ -336,7 +338,7 @@ public abstract class MinimizeJvmDowngraderApi extends DefaultTask {
         };
         for (byte[] bytes : classes.values()) {
             new ClassReader(bytes).accept(
-                new ClassRemapper(new ClassVisitor(Opcodes.ASM9) {}, collector),
+                new ClassRemapper(new ClassWriter(0), collector),
                 0);
         }
         if (!absent.isEmpty()) {
@@ -384,6 +386,7 @@ public abstract class MinimizeJvmDowngraderApi extends DefaultTask {
         Attributes attributes = manifest.getMainAttributes();
         attributes.putValue("Manifest-Version", "1.0");
         attributes.putValue("GTNH-Minimized-JvmDowngrader-API", "true");
+        manifest.getEntries().clear(); // Original per-entry digests no longer describe the minimized jar.
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         manifest.write(bytes);
         writeEntry(output, "META-INF/MANIFEST.MF", bytes.toByteArray(), written);
@@ -423,6 +426,18 @@ public abstract class MinimizeJvmDowngraderApi extends DefaultTask {
     }
 
     public static void verifySha256(Path path, String expected) throws IOException {
+        String actual = sha256(path);
+        if (!actual.equalsIgnoreCase(expected)) {
+            throw new GradleException(
+                "SHA-256 mismatch for " + path.getFileName() + ": expected " + expected + ", got " + actual);
+        }
+    }
+
+    public static String cacheSuffix(Path path) throws IOException {
+        return "gtnh-min-" + sha256(path);
+    }
+
+    private static String sha256(Path path) throws IOException {
         MessageDigest digest;
         try {
             digest = MessageDigest.getInstance("SHA-256");
@@ -440,10 +455,7 @@ public abstract class MinimizeJvmDowngraderApi extends DefaultTask {
         for (byte value : digest.digest()) {
             actual.append(String.format("%02x", value));
         }
-        if (!actual.toString().equalsIgnoreCase(expected)) {
-            throw new GradleException(
-                "SHA-256 mismatch for " + path.getFileName() + ": expected " + expected + ", got " + actual);
-        }
+        return actual.toString();
     }
 
     private static void writeLines(Path path, Set<String> values) throws IOException {
