@@ -33,12 +33,14 @@ dependencies {
     depload("it.unimi.dsi:fastutil:8.5.18") // Apache 2.0
     depload("org.joml:joml:1.10.8") // MIT
     depload("com.mojang:brigadier:1.0.18") // MIT
+    depload("com.github.GTNewHorizons:DataFixerUpper-J8:10.0.21-2:preshadow") // MIT
     depload("xyz.wagyourtail.jvmdowngrader:jvmdowngrader-java-api:${jvmDgVersion}:downgraded-8", "8") // LGPL 2.1
     depload("xyz.wagyourtail.jvmdowngrader:jvmdowngrader-java-api:${jvmDgVersion}:downgraded-17", "17") // LGPL 2.1
 
     bundledSources("it.unimi.dsi:fastutil:8.5.18:sources")
     bundledSources("org.joml:joml:1.10.8:sources")
     bundledSources("com.mojang:brigadier:1.0.18:sources")
+    bundledSources("com.github.GTNewHorizons:DataFixerUpper-J8:10.0.21-2:sources")
 
     compileOnly("com.gtnewhorizons.retrofuturabootstrap:RetroFuturaBootstrap:1.0.10") { transitive = false }
     compileOnly('org.jetbrains:annotations:26.0.1')
