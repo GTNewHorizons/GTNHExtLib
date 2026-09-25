@@ -2,6 +2,7 @@ import com.gtnewhorizons.retrofuturagradle.mcp.ReobfuscatedJar
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.gtnewhorizons.gtnhextlib.build.MinimizeJvmDowngraderApi
 import com.gtnewhorizons.gtnhextlib.build.VerifyJvmDowngraderArtifacts
+import com.gtnewhorizons.gtnhextlib.build.VerifyJvmDowngraderReports
 import org.gradle.jvm.tasks.Jar
 
 plugins {
@@ -85,20 +86,32 @@ val verifyJvmDowngraderArtifacts by tasks.registering(VerifyJvmDowngraderArtifac
 tasks.named("fatJar") {
     dependsOn(verifyJvmDowngraderArtifacts)
 }
+tasks.named("check") {
+    dependsOn(verifyJvmDowngraderArtifacts)
+}
 tasks.named("assemble") {
     dependsOn(reobfShadowJar)
+}
+
+val report8 = providers.gradleProperty("jvmdgUsageReport8")
+val report17 = providers.gradleProperty("jvmdgUsageReport17")
+require(report8.isPresent == report17.isPresent) { "Supply both jvmdgUsageReport8 and jvmdgUsageReport17" }
+val verifyJvmDowngraderReports by tasks.registering(VerifyJvmDowngraderReports::class) {
+    java8Report.set(layout.file(report8.map { file(it) }))
+    java17Report.set(layout.file(report17.map { file(it) }))
 }
 
 fun minimizedJvmDowngraderApi(javaTarget: String) =
     tasks.register<MinimizeJvmDowngraderApi>("minimizeJvmDowngraderApi$javaTarget") {
         group = "build"
         description = "Builds the Java $javaTarget JvmDowngrader API required by a closed-pack usage report"
+        dependsOn(verifyJvmDowngraderReports)
         getJavaTarget().set(javaTarget)
         val jarName = "jvmdowngrader-java-api-$jvmDowngraderVersion-downgraded-$javaTarget.jar"
         expectedSha256.set(jvmDowngraderApiChecksums.getValue(jarName))
         usageReport.set(layout.file(providers.gradleProperty("jvmdgUsageReport$javaTarget").map { file(it) }))
         inputApiJar.set(layout.file(provider {
-            configurations["bundled"].single { it.name.endsWith("-downgraded-$javaTarget.jar") }
+            configurations["bundled"].single { it.name == jarName }
         }))
         outputJar.set(layout.buildDirectory.file(
             "jvmdg-minimized/java$javaTarget/" +
@@ -113,28 +126,52 @@ tasks.register<Jar>("gtnhOfflineJar") {
     group = "build"
     description =
         "Builds the closed-pack offline jar using -PjvmdgUsageReport8 and -PjvmdgUsageReport17"
-    archiveClassifier.set("offline-gtnh")
+    archiveClassifier.set("gtnh")
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    duplicatesStrategy = DuplicatesStrategy.FAIL
     dependsOn(tasks.named("reobfJar"), minimizeJvmDowngraderApi8, minimizeJvmDowngraderApi17)
 
+    val version = jvmDowngraderVersion
+    val apiJars = mapOf(
+        "8" to minimizeJvmDowngraderApi8.flatMap { it.outputJar },
+        "17" to minimizeJvmDowngraderApi17.flatMap { it.outputJar },
+    )
     val reobfJar = tasks.named<ReobfuscatedJar>("reobfJar")
     from(zipTree(reobfJar.flatMap { it.archiveFile })) {
+        exclude("META-INF/MANIFEST.MF")
         exclude(
             "META-INF/falsepatternlib_repo/xyz/wagyourtail/jvmdowngrader/" +
                 "jvmdowngrader-java-api/**/*.jar")
+        filesMatching(listOf("META-INF/gtnhextlib_deps8.json", "META-INF/gtnhextlib_deps17.json")) {
+            filter { line: String ->
+                var updated = line
+                apiJars.forEach { (target, jar) ->
+                    val suffix = MinimizeJvmDowngraderApi.cacheSuffix(jar.get().asFile.toPath())
+                    updated = updated.replace(
+                        "jvmdowngrader-java-api:$version:downgraded-$target\"",
+                        "jvmdowngrader-java-api:$version:downgraded-$target-$suffix\"")
+                }
+                updated
+            }
+        }
     }
     manifest {
         from(tasks.shadowJar.get().manifest)
+        attributes("GTNH-Minimized-JvmDowngrader-API" to "true")
     }
 
     val apiRepositoryPath =
         "META-INF/falsepatternlib_repo/xyz/wagyourtail/jvmdowngrader/" +
             "jvmdowngrader-java-api/$jvmDowngraderVersion"
     listOf(minimizeJvmDowngraderApi8, minimizeJvmDowngraderApi17).forEach { minimized ->
+        val minimizedJar = minimized.flatMap { it.outputJar }
         into(apiRepositoryPath) {
-            from(minimized.flatMap { it.outputJar })
+            from(minimizedJar)
+            rename { name ->
+                val suffix = MinimizeJvmDowngraderApi.cacheSuffix(minimizedJar.get().asFile.toPath())
+                name.removeSuffix(".jar") + "-$suffix.jar"
+            }
         }
     }
 }

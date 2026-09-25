@@ -6,8 +6,102 @@ on:
     branches: [ master, main ]
   push:
     branches: [ master, main ]
+  workflow_dispatch:
+    inputs:
+      daxxl-run-id:
+        description: 'DAXXL daily run ID (empty selects latest successful daily)'
+        type: string
+        required: false
 
 jobs:
   build-and-test:
     uses: GTNewHorizons/GTNH-Actions-Workflows/.github/workflows/build-and-test.yml@master
     secrets: inherit
+
+  gtnh-report-build:
+    name: Build minimized GTNH jar from daily reports
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test report selection
+        run: node --test .github/scripts/select-daxxl-reports.test.cjs
+
+      - name: Select reports from a successful DAXXL daily
+        id: reports
+        uses: actions/github-script@v8
+        env:
+          DAXXL_RUN_ID: ${{ inputs.daxxl-run-id }}
+        with:
+          github-token: ${{ secrets.DAXXL_REPORTS_TOKEN || github.token }}
+          script: |
+            const source = await require('./.github/scripts/select-daxxl-reports.cjs')(github, process.env.DAXXL_RUN_ID);
+            const fs = require('node:fs');
+            fs.mkdirSync('build/daxxl-reports', { recursive: true });
+            fs.writeFileSync('build/daxxl-reports/source.json', JSON.stringify(source, null, 2) + '\n');
+            core.setOutput('artifact-ids', source.reports.map(report => report.id).join(','));
+            core.setOutput('run-id', String(source.run_id));
+            await core.summary.addLink(`DAXXL daily run ${source.run_id}`, source.url)
+              .addRaw(`\n\nSource commit: ${source.head_sha}\n`).write();
+
+      - name: Download both reports from the selected run
+        uses: actions/download-artifact@v8
+        with:
+          repository: GTNewHorizons/DreamAssemblerXXL
+          run-id: ${{ steps.reports.outputs.run-id }}
+          artifact-ids: ${{ steps.reports.outputs.artifact-ids }}
+          github-token: ${{ secrets.DAXXL_REPORTS_TOKEN || github.token }}
+          path: build/daxxl-reports
+          merge-multiple: true
+
+      - name: Determine JDK versions
+        id: java
+        shell: bash
+        run: |
+          {
+            echo 'versions<<EOF'
+            printf '8\n17\n21\n'
+            sed -n 's/^toolchainVersion=//p' gradle/gradle-daemon-jvm.properties
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: ${{ steps.java.outputs.versions }}
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Build report-driven offline GTNH jar
+        run: >-
+          bash ./gradlew --build-cache --stacktrace gtnhOfflineJar
+          -PjvmdgUsageReport8=build/daxxl-reports/jvmdg-usage-java8.json
+          -PjvmdgUsageReport17=build/daxxl-reports/jvmdg-usage-java17.json
+
+      - name: Verify embedded dependency identities
+        run: python3 .github/scripts/check-offline-jar.py build/libs/*-gtnh.jar
+
+      - name: Upload minimized GTNH jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: gtnh-offline-jar
+          path: build/libs/*-gtnh.jar
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload source reports and validation audits
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gtnh-minimization-reports
+          path: |
+            build/daxxl-reports/
+            build/reports/jvmdg-minimized/
+          if-no-files-found: warn
+          retention-days: 90
