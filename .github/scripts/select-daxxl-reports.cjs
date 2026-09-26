@@ -9,9 +9,10 @@ module.exports = async function selectReports(github, runId = '') {
   } else {
     const { data } = await github.rest.actions.listWorkflowRuns({
       owner, repo, workflow_id: 'daily-modpack-build.yml',
-      branch: 'master', status: 'success', exclude_pull_requests: true, per_page: 1,
+      branch: 'master', status: 'success', exclude_pull_requests: true, per_page: 100,
     });
-    run = data.workflow_runs[0];
+    run = data.workflow_runs.reduce((latest, candidate) =>
+      !latest || candidate.created_at > latest.created_at ? candidate : latest, undefined);
   }
   if (!run || run.conclusion !== 'success' || run.head_branch !== 'master'
       || run.path !== '.github/workflows/daily-modpack-build.yml'
