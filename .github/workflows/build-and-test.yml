@@ -90,10 +90,10 @@ jobs:
       - name: Upload minimized GTNH jar
         uses: actions/upload-artifact@v7
         with:
-          name: gtnh-offline-jar
           path: build/libs/*-gtnh.jar
           if-no-files-found: error
           retention-days: 90
+          archive: false
 
       - name: Upload source reports and validation audits
         if: always()
