@@ -2,7 +2,8 @@
     "identifier": "falsepatternlib_dependencies",
     "repositories": [
         "https://repo1.maven.org/maven2/",
-        "https://libraries.minecraft.net/"
+        "https://libraries.minecraft.net/",
+        "https://nexus.gtnewhorizons.com/repository/public/"
     ],
     "dependencies": {
         "always": {
